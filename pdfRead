@@ -1,0 +1,39 @@
+from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+from pdf2image import convert_from_path
+from PIL import Image
+import cv2
+import numpy as np
+
+# Load TrOCR model and processor
+processor = TrOCRProcessor.from_pretrained('microsoft/trocr-base-handwritten')
+model = VisionEncoderDecoderModel.from_pretrained('microsoft/trocr-base-handwritten')
+
+def preprocess_image(pil_img):
+    # Convert PIL to OpenCV, then grayscale for better OCR
+    img_cv = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2GRAY)
+    return Image.fromarray(img_cv)
+
+def extract_text_from_image(image):
+    # Prepare input
+    pixel_values = processor(images=image, return_tensors="pt").pixel_values
+    generated_ids = model.generate(pixel_values)
+    generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+    return generated_text
+
+def extract_text_from_pdf(pdf_path):
+    images = convert_from_path(pdf_path, dpi=300)
+    all_text = ""
+
+    for i, image in enumerate(images):
+        print(f"Processing Page {i+1}...")
+        preprocessed = preprocess_image(image)
+        text = extract_text_from_image(preprocessed)
+        all_text += f"\n--- Page {i+1} ---\n{text}"
+
+    return all_text
+
+# Run the pipeline
+pdf_path = "hipaa_form.pdf"
+final_text = extract_text_from_pdf(pdf_path)
+
+print("Full extracted text:\n", final_text)
